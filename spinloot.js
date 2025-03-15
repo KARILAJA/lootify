@@ -12,7 +12,6 @@ const config = {
   maxSpins: 100,
   tokenPath: './token.txt',
   quantity: 5,
-  price: 5,
   logResults: true
 };
 
@@ -24,6 +23,27 @@ function getWalletFromUser() {
       } else {
         console.log('Invalid wallet! Must start with "0x" and have appropriate length.');
         resolve(getWalletFromUser());
+      }
+    });
+  });
+}
+function getBoxType() {
+  return new Promise((resolve) => {
+    process.stdout.write(`
+    Select BOX :
+      1. FARMER?    5.00   Diamonds
+      2. SAFE       25.00  Diamonds
+      3. GMONAD     50.00  Diamonds
+      4. A HUNDRED  100.00 Diamonds
+      5. ONE SHOT   500.00 Diamonds
+      \n`);
+      
+    rl.question('Select BOX : ', (number) => {
+        if (number > 5 || number <= 0) {
+        console.log('Invalid Selection');
+        resolve(getBoxType());
+      } else {
+        resolve(number);
       }
     });
   });
@@ -73,10 +93,19 @@ function processSpinResults(results) {
   };
 }
 
-async function spinBox(token, wallet) {
+async function spinBox(token, wallet, box) {
   try {
+    const boxes = {
+      price: {
+      0: 5,
+      1: 25,
+      2: 50,
+      3: 100,
+      4: 500
+      }
+    }
     const response = await axios({
-      url: "https://1vpveb4uje.execute-api.us-east-2.amazonaws.com/loot/open/solana/monad-box1",
+      url: `https://1vpveb4uje.execute-api.us-east-2.amazonaws.com/loot/open/solana/monad-box${box}`,
       method: "POST",
       headers: {
         "accept": "application/json, text/plain, */*",
@@ -96,14 +125,14 @@ async function spinBox(token, wallet) {
       },
       data: {
         "network": "solana",
-        "slug": "monad-box1",
+        "slug": `monad-box${box}`,
         "access_token": token,
         "wallet": wallet,
         "qnt": config.quantity,
-        "price": config.price
+        "price": boxes.price[box-1]
       }
     });
-
+  
     if (Array.isArray(response.data)) {
       if (config.logResults) {
         logToFile(response.data, 'raw_spin_results.json');
@@ -173,7 +202,16 @@ async function runBot() {
   console.log('Starting Auto Spin Bot...');
   
   const wallet = await getWalletFromUser();
+  const box = await getBoxType();
+  const boxes = {
+    0: "FARMER?",
+    1: "SAFE",
+    2: "GMONAD",
+    3: "A HUNDRED",
+    4: "ONE SHOT"
+  }
   console.log(`Wallet in use: ${wallet}`);
+  console.log(`Selected BOX: ${boxes[box-1]}`);
   
   const token = await getToken();
   if (!token) {
@@ -216,7 +254,7 @@ async function runBot() {
     spinCount++;
     console.log(`\n[Spin #${spinCount}] Attempting to spin box...`);
     
-    const spinResult = await spinBox(token, wallet);
+    const spinResult = await spinBox(token, wallet, box);
     
     if (spinResult) {
       if (spinResult.success) {
